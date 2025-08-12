@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+build/
+dist/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Solana
+.anchor/
+target/
+test-ledger/
+keypairs/
+*.so
+
+# Solana keypairs and private keys (NEVER commit these)
+*keypair*.json
+*.json
+!package*.json
+!tsconfig*.json
+!Anchor.toml
+id.json
+devnet.json
+mainnet.json
+
+# Keep .keep files to preserve directory structure
+!**/.keep
+!**/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

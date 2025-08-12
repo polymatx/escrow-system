@@ -1,0 +1,15 @@
+# This file ensures the deployments/ directory is tracked by Git
+
+The deployments/ folder stores deployment records for different networks:
+- deployments/localnet.json (created when deploying to localnet)
+- deployments/devnet.json (created when deploying to devnet)  
+- deployments/mainnet.json (created when deploying to mainnet)
+
+Each deployment record contains:
+- Program ID
+- Cluster/network information
+- Deployment timestamp
+- Deployer address
+- Version information
+
+This folder starts empty but gets populated automatically during deployment.

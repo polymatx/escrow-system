@@ -1,0 +1,558 @@
+// lib.rs - Main program file
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer, Mint};
+
+declare_id!("7a6GBPdjMAfHTKtE4BqzDaynLUBLXpWzSJsVaAo5rMgj");
+
+#[program]
+pub mod escrow_system {
+    use super::*;
+
+    /// Initialize a new escrow agreement
+    pub fn initialize_escrow(
+        ctx: Context<InitializeEscrow>,
+        amount: u64,
+        escrow_seed: u64,
+        seller: Pubkey,
+        release_conditions: String,
+        timeout_duration: Option<i64>, // Optional timeout in seconds
+    ) -> Result<()> {
+        let escrow = &mut ctx.accounts.escrow;
+        let clock = Clock::get()?;
+        
+        // Validate inputs
+        require!(amount > 0, EscrowError::InvalidAmount);
+        require!(release_conditions.len() <= 500, EscrowError::ConditionsTooLong);
+        
+        // Initialize escrow state
+        escrow.buyer = ctx.accounts.buyer.key();
+        escrow.seller = seller;
+        escrow.mint = ctx.accounts.mint.key();
+        escrow.amount = amount;
+        escrow.escrow_seed = escrow_seed;
+        escrow.release_conditions = release_conditions;
+        escrow.state = EscrowState::Initialized;
+        escrow.created_at = clock.unix_timestamp;
+        escrow.timeout_at = timeout_duration.map(|duration| clock.unix_timestamp + duration);
+        escrow.arbiter = None;
+        escrow.bump = ctx.bumps.escrow;
+        escrow.vault_bump = ctx.bumps.vault;
+
+        msg!("Escrow initialized with seed: {}", escrow_seed);
+        emit!(EscrowCreated {
+            escrow: escrow.key(),
+            buyer: escrow.buyer,
+            seller: escrow.seller,
+            amount: escrow.amount,
+            mint: escrow.mint,
+        });
+
+        Ok(())
+    }
+
+    /// Deposit funds into escrow (buyer deposits funds)
+    pub fn deposit(ctx: Context<Deposit>) -> Result<()> {
+        require!(
+            ctx.accounts.escrow.state == EscrowState::Initialized,
+            EscrowError::InvalidState
+        );
+        require!(
+            ctx.accounts.depositor.key() == ctx.accounts.escrow.buyer,
+            EscrowError::UnauthorizedDepositor
+        );
+
+        let amount = ctx.accounts.escrow.amount;
+        let escrow_key = ctx.accounts.escrow.key();
+        
+        // Transfer tokens from buyer to vault
+        let transfer_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.depositor_token_account.to_account_info(),
+                to: ctx.accounts.vault.to_account_info(),
+                authority: ctx.accounts.depositor.to_account_info(),
+            },
+        );
+        token::transfer(transfer_ctx, amount)?;
+
+        // Now take mutable borrow to update state
+        let escrow = &mut ctx.accounts.escrow;
+        escrow.state = EscrowState::Funded;
+        escrow.funded_at = Some(Clock::get()?.unix_timestamp);
+
+        msg!("Escrow funded with {} tokens", amount);
+        emit!(EscrowFunded {
+            escrow: escrow_key,
+            amount,
+        });
+
+        Ok(())
+    }
+
+    /// Release funds to seller (buyer confirms or timeout reached)
+    pub fn release(ctx: Context<Release>) -> Result<()> {
+        let clock = Clock::get()?;
+        
+        require!(
+            ctx.accounts.escrow.state == EscrowState::Funded,
+            EscrowError::InvalidState
+        );
+
+        let authority = ctx.accounts.authority.key();
+        let can_release = authority == ctx.accounts.escrow.buyer || 
+                         authority == ctx.accounts.escrow.seller ||
+                         (ctx.accounts.escrow.arbiter.is_some() && authority == ctx.accounts.escrow.arbiter.unwrap()) ||
+                         (ctx.accounts.escrow.timeout_at.is_some() && clock.unix_timestamp >= ctx.accounts.escrow.timeout_at.unwrap());
+
+        require!(can_release, EscrowError::UnauthorizedRelease);
+
+        // Store values we need before taking mutable borrow
+        let buyer = ctx.accounts.escrow.buyer;
+        let escrow_seed = ctx.accounts.escrow.escrow_seed;
+        let bump = ctx.accounts.escrow.bump;
+        let amount = ctx.accounts.escrow.amount;
+        let escrow_key = ctx.accounts.escrow.key();
+        
+        // Transfer tokens from vault to seller
+        let escrow_seeds = &[
+            b"escrow",
+            buyer.as_ref(),
+            &escrow_seed.to_le_bytes(),
+            &[bump],
+        ];
+        let signer_seeds = &[&escrow_seeds[..]];
+
+        let transfer_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.seller_token_account.to_account_info(),
+                authority: ctx.accounts.escrow.to_account_info(),
+            },
+            signer_seeds,
+        );
+        token::transfer(transfer_ctx, amount)?;
+
+        // Now take mutable borrow to update state
+        let escrow = &mut ctx.accounts.escrow;
+        escrow.state = EscrowState::Released;
+        escrow.released_at = Some(clock.unix_timestamp);
+        escrow.released_by = Some(authority);
+
+        msg!("Escrow released to seller");
+        emit!(EscrowReleased {
+            escrow: escrow_key,
+            released_by: authority,
+            amount,
+        });
+
+        Ok(())
+    }
+
+    /// Cancel escrow and return funds to buyer
+    pub fn cancel(ctx: Context<Cancel>) -> Result<()> {
+        require!(
+            ctx.accounts.escrow.state == EscrowState::Funded || ctx.accounts.escrow.state == EscrowState::Initialized,
+            EscrowError::InvalidState
+        );
+
+        let authority = ctx.accounts.authority.key();
+        let can_cancel = authority == ctx.accounts.escrow.buyer || 
+                        (ctx.accounts.escrow.arbiter.is_some() && authority == ctx.accounts.escrow.arbiter.unwrap());
+
+        require!(can_cancel, EscrowError::UnauthorizedCancel);
+
+        // Store values we need before taking mutable borrow
+        let state = ctx.accounts.escrow.state;
+        let buyer = ctx.accounts.escrow.buyer;
+        let escrow_seed = ctx.accounts.escrow.escrow_seed;
+        let bump = ctx.accounts.escrow.bump;
+        let amount = ctx.accounts.escrow.amount;
+        let escrow_key = ctx.accounts.escrow.key();
+
+        // Only transfer if escrow is funded
+        if state == EscrowState::Funded {
+            let escrow_seeds = &[
+                b"escrow",
+                buyer.as_ref(),
+                &escrow_seed.to_le_bytes(),
+                &[bump],
+            ];
+            let signer_seeds = &[&escrow_seeds[..]];
+
+            let transfer_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.buyer_token_account.to_account_info(),
+                    authority: ctx.accounts.escrow.to_account_info(),
+                },
+                signer_seeds,
+            );
+            token::transfer(transfer_ctx, amount)?;
+        }
+
+        // Now take mutable borrow to update state
+        let escrow = &mut ctx.accounts.escrow;
+        escrow.state = EscrowState::Cancelled;
+        escrow.cancelled_at = Some(Clock::get()?.unix_timestamp);
+        escrow.cancelled_by = Some(authority);
+
+        msg!("Escrow cancelled");
+        emit!(EscrowCancelled {
+            escrow: escrow_key,
+            cancelled_by: authority,
+        });
+
+        Ok(())
+    }
+
+    /// Set an arbiter for dispute resolution
+    pub fn set_arbiter(ctx: Context<SetArbiter>, arbiter: Pubkey) -> Result<()> {
+        let escrow = &mut ctx.accounts.escrow;
+        
+        require!(
+            escrow.state == EscrowState::Initialized || escrow.state == EscrowState::Funded,
+            EscrowError::InvalidState
+        );
+        require!(
+            ctx.accounts.authority.key() == escrow.buyer,
+            EscrowError::UnauthorizedArbiter
+        );
+
+        escrow.arbiter = Some(arbiter);
+
+        msg!("Arbiter set: {}", arbiter);
+        emit!(ArbiterSet {
+            escrow: escrow.key(),
+            arbiter,
+        });
+
+        Ok(())
+    }
+
+    /// Update escrow conditions (only before funding)
+    pub fn update_conditions(
+        ctx: Context<UpdateConditions>,
+        new_conditions: String,
+    ) -> Result<()> {
+        let escrow = &mut ctx.accounts.escrow;
+        
+        require!(
+            escrow.state == EscrowState::Initialized,
+            EscrowError::InvalidState
+        );
+        require!(
+            ctx.accounts.authority.key() == escrow.buyer,
+            EscrowError::UnauthorizedUpdate
+        );
+        require!(new_conditions.len() <= 500, EscrowError::ConditionsTooLong);
+
+        escrow.release_conditions = new_conditions.clone();
+
+        msg!("Conditions updated");
+        emit!(ConditionsUpdated {
+            escrow: escrow.key(),
+            conditions: new_conditions,
+        });
+
+        Ok(())
+    }
+
+    /// Close escrow account and recover rent (only after completion)
+    pub fn close_escrow(ctx: Context<CloseEscrow>) -> Result<()> {
+        let escrow = &ctx.accounts.escrow;
+        
+        require!(
+            escrow.state == EscrowState::Released || escrow.state == EscrowState::Cancelled,
+            EscrowError::InvalidState
+        );
+        require!(
+            ctx.accounts.authority.key() == escrow.buyer,
+            EscrowError::UnauthorizedClose
+        );
+
+        // Account will be closed automatically by Anchor
+        msg!("Escrow account closed");
+
+        Ok(())
+    }
+}
+
+// Account structures
+#[derive(Accounts)]
+#[instruction(amount: u64, escrow_seed: u64, seller: Pubkey)]
+pub struct InitializeEscrow<'info> {
+    #[account(
+        init,
+        payer = buyer,
+        space = EscrowAccount::SIZE,
+        seeds = [b"escrow", buyer.key().as_ref(), &escrow_seed.to_le_bytes()],
+        bump
+    )]
+    pub escrow: Account<'info, EscrowAccount>,
+    
+    #[account(
+        init,
+        payer = buyer,
+        token::mint = mint,
+        token::authority = escrow,
+        seeds = [b"vault", buyer.key().as_ref(), &escrow_seed.to_le_bytes()],
+        bump
+    )]
+    pub vault: Account<'info, TokenAccount>,
+    
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+    
+    pub mint: Account<'info, Mint>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct Deposit<'info> {
+    #[account(
+        mut,
+        seeds = [b"escrow", escrow.buyer.as_ref(), &escrow.escrow_seed.to_le_bytes()],
+        bump = escrow.bump
+    )]
+    pub escrow: Account<'info, EscrowAccount>,
+    
+    #[account(
+        mut,
+        seeds = [b"vault", escrow.buyer.as_ref(), &escrow.escrow_seed.to_le_bytes()],
+        bump = escrow.vault_bump
+    )]
+    pub vault: Account<'info, TokenAccount>,
+    
+    #[account(mut)]
+    pub depositor: Signer<'info>,
+    
+    #[account(
+        mut,
+        constraint = depositor_token_account.mint == escrow.mint,
+        constraint = depositor_token_account.owner == depositor.key()
+    )]
+    pub depositor_token_account: Account<'info, TokenAccount>,
+    
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct Release<'info> {
+    #[account(
+        mut,
+        seeds = [b"escrow", escrow.buyer.as_ref(), &escrow.escrow_seed.to_le_bytes()],
+        bump = escrow.bump
+    )]
+    pub escrow: Account<'info, EscrowAccount>,
+    
+    #[account(
+        mut,
+        seeds = [b"vault", escrow.buyer.as_ref(), &escrow.escrow_seed.to_le_bytes()],
+        bump = escrow.vault_bump
+    )]
+    pub vault: Account<'info, TokenAccount>,
+    
+    pub authority: Signer<'info>,
+    
+    #[account(
+        mut,
+        constraint = seller_token_account.mint == escrow.mint,
+        constraint = seller_token_account.owner == escrow.seller
+    )]
+    pub seller_token_account: Account<'info, TokenAccount>,
+    
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct Cancel<'info> {
+    #[account(
+        mut,
+        seeds = [b"escrow", escrow.buyer.as_ref(), &escrow.escrow_seed.to_le_bytes()],
+        bump = escrow.bump
+    )]
+    pub escrow: Account<'info, EscrowAccount>,
+    
+    #[account(
+        mut,
+        seeds = [b"vault", escrow.buyer.as_ref(), &escrow.escrow_seed.to_le_bytes()],
+        bump = escrow.vault_bump
+    )]
+    pub vault: Account<'info, TokenAccount>,
+    
+    pub authority: Signer<'info>,
+    
+    #[account(
+        mut,
+        constraint = buyer_token_account.mint == escrow.mint,
+        constraint = buyer_token_account.owner == escrow.buyer
+    )]
+    pub buyer_token_account: Account<'info, TokenAccount>,
+    
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct SetArbiter<'info> {
+    #[account(
+        mut,
+        seeds = [b"escrow", escrow.buyer.as_ref(), &escrow.escrow_seed.to_le_bytes()],
+        bump = escrow.bump
+    )]
+    pub escrow: Account<'info, EscrowAccount>,
+    
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateConditions<'info> {
+    #[account(
+        mut,
+        seeds = [b"escrow", escrow.buyer.as_ref(), &escrow.escrow_seed.to_le_bytes()],
+        bump = escrow.bump
+    )]
+    pub escrow: Account<'info, EscrowAccount>,
+    
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CloseEscrow<'info> {
+    #[account(
+        mut,
+        close = authority,
+        seeds = [b"escrow", escrow.buyer.as_ref(), &escrow.escrow_seed.to_le_bytes()],
+        bump = escrow.bump
+    )]
+    pub escrow: Account<'info, EscrowAccount>,
+    
+    #[account(mut)]
+    pub authority: Signer<'info>,
+}
+
+// Data structures
+#[account]
+pub struct EscrowAccount {
+    pub buyer: Pubkey,                    // 32 bytes
+    pub seller: Pubkey,                   // 32 bytes
+    pub mint: Pubkey,                     // 32 bytes
+    pub amount: u64,                      // 8 bytes
+    pub escrow_seed: u64,                 // 8 bytes
+    pub release_conditions: String,       // 4 + up to 500 bytes
+    pub state: EscrowState,               // 1 byte
+    pub created_at: i64,                  // 8 bytes
+    pub funded_at: Option<i64>,           // 1 + 8 bytes
+    pub timeout_at: Option<i64>,          // 1 + 8 bytes
+    pub released_at: Option<i64>,         // 1 + 8 bytes
+    pub cancelled_at: Option<i64>,        // 1 + 8 bytes
+    pub released_by: Option<Pubkey>,      // 1 + 32 bytes
+    pub cancelled_by: Option<Pubkey>,     // 1 + 32 bytes
+    pub arbiter: Option<Pubkey>,          // 1 + 32 bytes
+    pub bump: u8,                         // 1 byte
+    pub vault_bump: u8,                   // 1 byte
+}
+
+impl EscrowAccount {
+    pub const SIZE: usize = 8 +           // discriminator
+        32 +                              // buyer
+        32 +                              // seller
+        32 +                              // mint
+        8 +                               // amount
+        8 +                               // escrow_seed
+        4 + 500 +                         // release_conditions
+        1 +                               // state
+        8 +                               // created_at
+        9 +                               // funded_at
+        9 +                               // timeout_at
+        9 +                               // released_at
+        9 +                               // cancelled_at
+        33 +                              // released_by
+        33 +                              // cancelled_by
+        33 +                              // arbiter
+        1 +                               // bump
+        1;                                // vault_bump
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, Copy)]
+pub enum EscrowState {
+    Initialized,
+    Funded,
+    Released,
+    Cancelled,
+}
+
+// Events
+#[event]
+pub struct EscrowCreated {
+    pub escrow: Pubkey,
+    pub buyer: Pubkey,
+    pub seller: Pubkey,
+    pub amount: u64,
+    pub mint: Pubkey,
+}
+
+#[event]
+pub struct EscrowFunded {
+    pub escrow: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct EscrowReleased {
+    pub escrow: Pubkey,
+    pub released_by: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct EscrowCancelled {
+    pub escrow: Pubkey,
+    pub cancelled_by: Pubkey,
+}
+
+#[event]
+pub struct ArbiterSet {
+    pub escrow: Pubkey,
+    pub arbiter: Pubkey,
+}
+
+#[event]
+pub struct ConditionsUpdated {
+    pub escrow: Pubkey,
+    pub conditions: String,
+}
+
+// Error codes
+#[error_code]
+pub enum EscrowError {
+    #[msg("Invalid amount: must be greater than 0")]
+    InvalidAmount,
+    
+    #[msg("Release conditions too long: maximum 500 characters")]
+    ConditionsTooLong,
+    
+    #[msg("Invalid escrow state for this operation")]
+    InvalidState,
+    
+    #[msg("Unauthorized depositor")]
+    UnauthorizedDepositor,
+    
+    #[msg("Unauthorized to release funds")]
+    UnauthorizedRelease,
+    
+    #[msg("Unauthorized to cancel escrow")]
+    UnauthorizedCancel,
+    
+    #[msg("Unauthorized to set arbiter")]
+    UnauthorizedArbiter,
+    
+    #[msg("Unauthorized to update conditions")]
+    UnauthorizedUpdate,
+    
+    #[msg("Unauthorized to close escrow")]
+    UnauthorizedClose,
+}

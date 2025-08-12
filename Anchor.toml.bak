@@ -1,0 +1,38 @@
+[features]
+seeds = false
+skip-lint = false
+
+[programs.localnet]
+escrow_system = "CtoJoNJJoTwaY9gAxQcNg2yDFN7QfCBpVsernPduwskC"
+
+[programs.devnet]
+escrow_system = "CtoJoNJJoTwaY9gAxQcNg2yDFN7QfCBpVsernPduwskC"
+
+[programs.mainnet]
+escrow_system = "CtoJoNJJoTwaY9gAxQcNg2yDFN7QfCBpVsernPduwskC"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+
+[test]
+startup_wait = 5000
+
+[[test.genesis]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+program = "metadata.so"
+
+[test.validator]
+url = "https://api.devnet.solana.com"
+
+[[test.validator.clone]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+
+[build]
+exclude = ["node_modules"]
