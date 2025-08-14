@@ -24,35 +24,62 @@ jobs:
           toolchain: 1.75.0
           profile: minimal
           override: true
+          components: rustfmt, clippy
       
-      - name: Setup Solana
-        uses: solana-labs/solana-verify-action@v1
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
         with:
-          solana_cli_version: 1.18.22
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.22/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
       
       - name: Install Anchor CLI
         run: |
-          npm install -g @coral-xyz/anchor-cli@0.31.1
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.31.1 anchor-cli --locked
           anchor --version
       
       - name: Setup Solana keypair
         run: |
           solana-keygen new --no-bip39-passphrase --force
+          solana config set --url localhost
           solana config get
       
       - name: Install dependencies
-        run: yarn install
+        run: yarn install --frozen-lockfile
       
       - name: Build program
-        run: anchor build
+        run: |
+          anchor build
+          ls -la target/deploy/
       
-      - name: Run tests
-        run: anchor test --skip-local-validator
+      - name: Start test validator and run tests
+        run: |
+          solana-test-validator --quiet --reset &
+          VALIDATOR_PID=$!
+          sleep 5
+          
+          # Check validator is running
+          solana cluster-version
+          
+          # Run tests
+          anchor test --skip-local-validator
+          
+          # Kill validator
+          kill $VALIDATOR_PID || true
 
   deploy-devnet:
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v3
       
@@ -69,29 +96,55 @@ jobs:
           profile: minimal
           override: true
       
-      - name: Setup Solana
-        uses: solana-labs/solana-verify-action@v1
-        with:
-          solana_cli_version: 1.18.22
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.22/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
       
       - name: Install Anchor CLI
-        run: npm install -g @coral-xyz/anchor-cli@0.31.1
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.31.1 anchor-cli --locked
+          anchor --version
       
       - name: Install dependencies
-        run: yarn install
+        run: yarn install --frozen-lockfile
+      
+      - name: Build program
+        run: anchor build
       
       - name: Deploy to devnet
         env:
           DEPLOY_KEYPAIR: ${{ secrets.DEVNET_DEPLOY_KEYPAIR }}
         run: |
+          # Check if keypair secret exists
+          if [ -z "$DEPLOY_KEYPAIR" ]; then
+            echo "Error: DEVNET_DEPLOY_KEYPAIR secret not set"
+            echo "Please add your deployment keypair to GitHub secrets"
+            exit 1
+          fi
+          
           echo "$DEPLOY_KEYPAIR" > keypair.json
           solana config set --keypair keypair.json --url devnet
-          anchor deploy --provider.cluster devnet
+          
+          # Request airdrop for deployment
+          solana airdrop 2 || true
+          sleep 5
+          
+          # Check balance
+          solana balance
+          
+          # Deploy
+          anchor deploy --provider.cluster devnet --program-name escrow_system
+          
+          # Clean up
+          rm keypair.json
 
   deploy-mainnet:
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: mainnet
     steps:
       - uses: actions/checkout@v3
@@ -109,21 +162,44 @@ jobs:
           profile: minimal
           override: true
       
-      - name: Setup Solana
-        uses: solana-labs/solana-verify-action@v1
-        with:
-          solana_cli_version: 1.18.22
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.22/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
       
       - name: Install Anchor CLI
-        run: npm install -g @coral-xyz/anchor-cli@0.31.1
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.31.1 anchor-cli --locked
+          anchor --version
       
       - name: Install dependencies
-        run: yarn install
+        run: yarn install --frozen-lockfile
+      
+      - name: Build program
+        run: anchor build
       
       - name: Deploy to mainnet
         env:
           DEPLOY_KEYPAIR: ${{ secrets.MAINNET_DEPLOY_KEYPAIR }}
         run: |
+          # Check if keypair secret exists
+          if [ -z "$DEPLOY_KEYPAIR" ]; then
+            echo "Error: MAINNET_DEPLOY_KEYPAIR secret not set"
+            echo "Please add your deployment keypair to GitHub secrets"
+            exit 1
+          fi
+          
           echo "$DEPLOY_KEYPAIR" > keypair.json
           solana config set --keypair keypair.json --url mainnet-beta
-          anchor deploy --provider.cluster mainnet-beta
+          
+          # Check balance (ensure you have enough SOL for deployment)
+          solana balance
+          
+          # Deploy with caution
+          echo "Deploying to mainnet..."
+          anchor deploy --provider.cluster mainnet-beta --program-name escrow_system
+          
+          # Clean up
+          rm keypair.json
