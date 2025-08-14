@@ -7,8 +7,9 @@ on:
     branches: [ main ]
 
 env:
-  SOLANA_VERSION: "1.18.18"
-  ANCHOR_VERSION: "0.29.0"
+  SOLANA_VERSION: "2.2.21"
+  ANCHOR_VERSION: "0.31.1"
+  RUST_VERSION: "1.79.0"
 
 jobs:
   test:
@@ -25,26 +26,64 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_VERSION }}
           profile: minimal
           override: true
+      
+      - name: Cache Cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache Solana
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/solana/
+            ~/.local/share/solana/
+          key: solana-${{ runner.os }}-${{ env.SOLANA_VERSION }}
       
       - name: Install Solana
         run: |
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
       
-      - name: Install Anchor
+      - name: Install AVM and Anchor
         run: |
+          rm -f ~/.cargo/bin/anchor || true
           cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          avm install ${{ env.ANCHOR_VERSION }}
-          avm use ${{ env.ANCHOR_VERSION }}
+          ~/.cargo/bin/avm install ${{ env.ANCHOR_VERSION }}
+          ~/.cargo/bin/avm use ${{ env.ANCHOR_VERSION }}
+      
+      - name: Verify installations
+        run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
+          ~/.cargo/bin/anchor --version
+      
+      - name: Setup Solana keypair
+        run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana-keygen new --no-bip39-passphrase --force
       
       - name: Install dependencies
         run: yarn install
       
+      - name: Build program
+        run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          ~/.cargo/bin/anchor build
+      
       - name: Run tests
-        run: anchor test
+        run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          ~/.cargo/bin/anchor test --skip-local-validator
 
   deploy-devnet:
     needs: test
@@ -62,7 +101,7 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_VERSION }}
           profile: minimal
           override: true
       
@@ -71,11 +110,11 @@ jobs:
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
       
-      - name: Install Anchor
+      - name: Install AVM and Anchor
         run: |
           cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          avm install ${{ env.ANCHOR_VERSION }}
-          avm use ${{ env.ANCHOR_VERSION }}
+          ~/.cargo/bin/avm install ${{ env.ANCHOR_VERSION }}
+          ~/.cargo/bin/avm use ${{ env.ANCHOR_VERSION }}
       
       - name: Install dependencies
         run: yarn install
@@ -84,9 +123,10 @@ jobs:
         env:
           DEPLOY_KEYPAIR: ${{ secrets.DEVNET_DEPLOY_KEYPAIR }}
         run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           echo "$DEPLOY_KEYPAIR" > keypair.json
           solana config set --keypair keypair.json --url devnet
-          anchor deploy --provider.cluster devnet
+          ~/.cargo/bin/anchor deploy --provider.cluster devnet
 
   deploy-mainnet:
     needs: test
@@ -105,7 +145,7 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_VERSION }}
           profile: minimal
           override: true
       
@@ -114,11 +154,11 @@ jobs:
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
       
-      - name: Install Anchor
+      - name: Install AVM and Anchor
         run: |
           cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          avm install ${{ env.ANCHOR_VERSION }}
-          avm use ${{ env.ANCHOR_VERSION }}
+          ~/.cargo/bin/avm install ${{ env.ANCHOR_VERSION }}
+          ~/.cargo/bin/avm use ${{ env.ANCHOR_VERSION }}
       
       - name: Install dependencies
         run: yarn install
@@ -127,6 +167,7 @@ jobs:
         env:
           DEPLOY_KEYPAIR: ${{ secrets.MAINNET_DEPLOY_KEYPAIR }}
         run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           echo "$DEPLOY_KEYPAIR" > keypair.json
           solana config set --keypair keypair.json --url mainnet-beta
-          anchor deploy --provider.cluster mainnet-beta
+          ~/.cargo/bin/anchor deploy --provider.cluster mainnet-beta
