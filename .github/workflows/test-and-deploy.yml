@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  SOLANA_VERSION: "1.18.22"
-  ANCHOR_VERSION: "0.31.1"
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -29,40 +25,29 @@ jobs:
           profile: minimal
           override: true
       
-      - name: Cache dependencies
-        uses: actions/cache@v3
+      - name: Setup Solana
+        uses: solana-labs/solana-verify-action@v1
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            ~/.cache/solana/
-            ~/.local/share/solana/
-          key: ${{ runner.os }}-solana-anchor-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}
+          solana_cli_version: 1.18.22
       
-      - name: Install Solana
+      - name: Install Anchor CLI
         run: |
-          sh -c "$(curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install)"
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          solana --version
-          solana-keygen new --no-bip39-passphrase --force
-      
-      - name: Install Anchor
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          npm install -g @coral-xyz/anchor-cli@${{ env.ANCHOR_VERSION }}
+          npm install -g @coral-xyz/anchor-cli@0.31.1
           anchor --version
+      
+      - name: Setup Solana keypair
+        run: |
+          solana-keygen new --no-bip39-passphrase --force
+          solana config get
       
       - name: Install dependencies
         run: yarn install
       
-      - name: Build and test
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          anchor build
-          anchor test --skip-local-validator
+      - name: Build program
+        run: anchor build
+      
+      - name: Run tests
+        run: anchor test --skip-local-validator
 
   deploy-devnet:
     needs: test
@@ -84,16 +69,13 @@ jobs:
           profile: minimal
           override: true
       
-      - name: Install Solana
-        run: |
-          sh -c "$(curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install)"
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          solana --version
+      - name: Setup Solana
+        uses: solana-labs/solana-verify-action@v1
+        with:
+          solana_cli_version: 1.18.22
       
-      - name: Install Anchor
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          npm install -g @coral-xyz/anchor-cli@${{ env.ANCHOR_VERSION }}
+      - name: Install Anchor CLI
+        run: npm install -g @coral-xyz/anchor-cli@0.31.1
       
       - name: Install dependencies
         run: yarn install
@@ -102,7 +84,6 @@ jobs:
         env:
           DEPLOY_KEYPAIR: ${{ secrets.DEVNET_DEPLOY_KEYPAIR }}
         run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           echo "$DEPLOY_KEYPAIR" > keypair.json
           solana config set --keypair keypair.json --url devnet
           anchor deploy --provider.cluster devnet
@@ -128,16 +109,13 @@ jobs:
           profile: minimal
           override: true
       
-      - name: Install Solana
-        run: |
-          sh -c "$(curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install)"
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          solana --version
+      - name: Setup Solana
+        uses: solana-labs/solana-verify-action@v1
+        with:
+          solana_cli_version: 1.18.22
       
-      - name: Install Anchor
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          npm install -g @coral-xyz/anchor-cli@${{ env.ANCHOR_VERSION }}
+      - name: Install Anchor CLI
+        run: npm install -g @coral-xyz/anchor-cli@0.31.1
       
       - name: Install dependencies
         run: yarn install
@@ -146,7 +124,6 @@ jobs:
         env:
           DEPLOY_KEYPAIR: ${{ secrets.MAINNET_DEPLOY_KEYPAIR }}
         run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           echo "$DEPLOY_KEYPAIR" > keypair.json
           solana config set --keypair keypair.json --url mainnet-beta
           anchor deploy --provider.cluster mainnet-beta
