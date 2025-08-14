@@ -41,17 +41,12 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-anchor-${{ env.ANCHOR_VERSION }}
       
-      - name: Cache Solana
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/solana/
-            ~/.local/share/solana/
-          key: solana-${{ runner.os }}-${{ env.SOLANA_VERSION }}
-      
-      - name: Install Solana
+      - name: Install Solana CLI
         run: |
-          curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
+          # Install Solana CLI using direct download
+          wget -O solana-install-init https://github.com/solana-labs/solana/releases/download/v${{ env.SOLANA_VERSION }}/solana-install-init-x86_64-unknown-linux-gnu
+          chmod +x solana-install-init
+          ./solana-install-init ${{ env.SOLANA_VERSION }}
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
@@ -64,10 +59,9 @@ jobs:
       - name: Verify installations
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          echo "PATH: $PATH"
-          which solana || echo "solana not in PATH"
-          which anchor || echo "anchor not in PATH"
+          echo "Solana version:"
           solana --version
+          echo "Anchor version:"
           anchor --version
       
       - name: Setup Solana keypair
@@ -111,9 +105,11 @@ jobs:
           profile: minimal
           override: true
       
-      - name: Install Solana
+      - name: Install Solana CLI
         run: |
-          curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
+          wget -O solana-install-init https://github.com/solana-labs/solana/releases/download/v${{ env.SOLANA_VERSION }}/solana-install-init-x86_64-unknown-linux-gnu
+          chmod +x solana-install-init
+          ./solana-install-init ${{ env.SOLANA_VERSION }}
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
       
@@ -157,9 +153,11 @@ jobs:
           profile: minimal
           override: true
       
-      - name: Install Solana
+      - name: Install Solana CLI
         run: |
-          curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
+          wget -O solana-install-init https://github.com/solana-labs/solana/releases/download/v${{ env.SOLANA_VERSION }}/solana-install-init-x86_64-unknown-linux-gnu
+          chmod +x solana-install-init
+          ./solana-install-init ${{ env.SOLANA_VERSION }}
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
       
