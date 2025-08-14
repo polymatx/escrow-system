@@ -9,7 +9,7 @@ on:
 env:
   SOLANA_VERSION: "2.2.21"
   ANCHOR_VERSION: "0.31.1"
-  RUST_VERSION: "1.81.0"
+  RUST_VERSION: "1.82.0"
 
 jobs:
   test:
@@ -39,7 +39,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-anchor-${{ env.ANCHOR_VERSION }}
       
       - name: Cache Solana
         uses: actions/cache@v3
@@ -54,18 +54,36 @@ jobs:
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
       
-      - name: Install Anchor CLI precompiled
+      - name: Install Anchor CLI
         run: |
-          wget -O anchor-cli.tar.bz2 https://github.com/coral-xyz/anchor/releases/download/v${{ env.ANCHOR_VERSION }}/anchor-cli-v${{ env.ANCHOR_VERSION }}-x86_64-unknown-linux-gnu.tar.bz2
-          tar -xjf anchor-cli.tar.bz2
-          sudo mv anchor ~/.cargo/bin/anchor
-          chmod +x ~/.cargo/bin/anchor
+          # Try different approaches to install anchor
+          if ! command -v anchor &> /dev/null; then
+            echo "Installing Anchor CLI..."
+            
+            # Method 1: Try precompiled binary from solana-foundation
+            wget -O /tmp/anchor.tar.bz2 "https://github.com/solana-foundation/anchor/releases/download/v${{ env.ANCHOR_VERSION }}/anchor-cli-v${{ env.ANCHOR_VERSION }}-x86_64-unknown-linux-gnu.tar.bz2" || \
+            
+            # Method 2: Try from coral-xyz releases  
+            wget -O /tmp/anchor.tar.bz2 "https://github.com/coral-xyz/anchor/releases/download/v${{ env.ANCHOR_VERSION }}/anchor-cli-v${{ env.ANCHOR_VERSION }}-x86_64-unknown-linux-gnu.tar.bz2" || \
+            
+            # Method 3: Build from source with newer Rust
+            (echo "Building from source..." && cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked)
+            
+            # Extract if downloaded
+            if [ -f /tmp/anchor.tar.bz2 ]; then
+              cd /tmp
+              tar -xjf anchor.tar.bz2
+              mkdir -p ~/.cargo/bin
+              mv anchor ~/.cargo/bin/anchor
+              chmod +x ~/.cargo/bin/anchor
+            fi
+          fi
       
       - name: Verify installations
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
-          ~/.cargo/bin/anchor --version
+          anchor --version || ~/.cargo/bin/anchor --version
       
       - name: Setup Solana keypair
         run: |
@@ -78,12 +96,20 @@ jobs:
       - name: Build program
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          ~/.cargo/bin/anchor build
+          if command -v anchor &> /dev/null; then
+            anchor build
+          else
+            ~/.cargo/bin/anchor build
+          fi
       
       - name: Run tests
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          ~/.cargo/bin/anchor test --skip-local-validator
+          if command -v anchor &> /dev/null; then
+            anchor test --skip-local-validator
+          else
+            ~/.cargo/bin/anchor test --skip-local-validator
+          fi
 
   deploy-devnet:
     needs: test
@@ -110,12 +136,9 @@ jobs:
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
       
-      - name: Install Anchor CLI precompiled
+      - name: Install Anchor CLI
         run: |
-          wget -O anchor-cli.tar.bz2 https://github.com/coral-xyz/anchor/releases/download/v${{ env.ANCHOR_VERSION }}/anchor-cli-v${{ env.ANCHOR_VERSION }}-x86_64-unknown-linux-gnu.tar.bz2
-          tar -xjf anchor-cli.tar.bz2
-          sudo mv anchor ~/.cargo/bin/anchor
-          chmod +x ~/.cargo/bin/anchor
+          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked
       
       - name: Install dependencies
         run: yarn install
@@ -127,7 +150,7 @@ jobs:
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           echo "$DEPLOY_KEYPAIR" > keypair.json
           solana config set --keypair keypair.json --url devnet
-          ~/.cargo/bin/anchor deploy --provider.cluster devnet
+          anchor deploy --provider.cluster devnet
 
   deploy-mainnet:
     needs: test
@@ -155,12 +178,9 @@ jobs:
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
       
-      - name: Install Anchor CLI precompiled
+      - name: Install Anchor CLI
         run: |
-          wget -O anchor-cli.tar.bz2 https://github.com/coral-xyz/anchor/releases/download/v${{ env.ANCHOR_VERSION }}/anchor-cli-v${{ env.ANCHOR_VERSION }}-x86_64-unknown-linux-gnu.tar.bz2
-          tar -xjf anchor-cli.tar.bz2
-          sudo mv anchor ~/.cargo/bin/anchor
-          chmod +x ~/.cargo/bin/anchor
+          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked
       
       - name: Install dependencies
         run: yarn install
@@ -172,4 +192,4 @@ jobs:
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           echo "$DEPLOY_KEYPAIR" > keypair.json
           solana config set --keypair keypair.json --url mainnet-beta
-          ~/.cargo/bin/anchor deploy --provider.cluster mainnet-beta
+          anchor deploy --provider.cluster mainnet-beta
