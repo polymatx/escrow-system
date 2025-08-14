@@ -7,9 +7,8 @@ on:
     branches: [ main ]
 
 env:
-  SOLANA_VERSION: "2.2.21"
+  SOLANA_VERSION: "1.18.22"
   ANCHOR_VERSION: "0.31.1"
-  RUST_VERSION: "1.82.0"
 
 jobs:
   test:
@@ -26,11 +25,11 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ env.RUST_VERSION }}
+          toolchain: 1.75.0
           profile: minimal
           override: true
       
-      - name: Cache Cargo
+      - name: Cache dependencies
         uses: actions/cache@v3
         with:
           path: |
@@ -38,51 +37,31 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-anchor-${{ env.ANCHOR_VERSION }}
+            ~/.cache/solana/
+            ~/.local/share/solana/
+          key: ${{ runner.os }}-solana-anchor-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}
       
-      - name: Install Solana CLI
+      - name: Install Solana
         run: |
-          # Install Solana CLI using direct download
-          wget -O solana-install-init https://github.com/solana-labs/solana/releases/download/v${{ env.SOLANA_VERSION }}/solana-install-init-x86_64-unknown-linux-gnu
-          chmod +x solana-install-init
-          ./solana-install-init ${{ env.SOLANA_VERSION }}
+          sh -c "$(curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
+          solana-keygen new --no-bip39-passphrase --force
       
-      - name: Install Anchor CLI
+      - name: Install Anchor
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked --force
-      
-      - name: Verify installations
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          echo "Solana version:"
-          solana --version
-          echo "Anchor version:"
+          npm install -g @coral-xyz/anchor-cli@${{ env.ANCHOR_VERSION }}
           anchor --version
       
-      - name: Setup Solana keypair
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          solana-keygen new --no-bip39-passphrase --force
-          solana config get
-      
       - name: Install dependencies
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          yarn install
+        run: yarn install
       
-      - name: Build program
+      - name: Build and test
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           anchor build
-      
-      - name: Run tests
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           anchor test --skip-local-validator
 
   deploy-devnet:
@@ -101,27 +80,23 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ env.RUST_VERSION }}
+          toolchain: 1.75.0
           profile: minimal
           override: true
       
-      - name: Install Solana CLI
+      - name: Install Solana
         run: |
-          wget -O solana-install-init https://github.com/solana-labs/solana/releases/download/v${{ env.SOLANA_VERSION }}/solana-install-init-x86_64-unknown-linux-gnu
-          chmod +x solana-install-init
-          ./solana-install-init ${{ env.SOLANA_VERSION }}
+          sh -c "$(curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install)"
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
       
-      - name: Install Anchor CLI
+      - name: Install Anchor
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked --force
+          npm install -g @coral-xyz/anchor-cli@${{ env.ANCHOR_VERSION }}
       
       - name: Install dependencies
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          yarn install
+        run: yarn install
       
       - name: Deploy to devnet
         env:
@@ -149,27 +124,23 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ env.RUST_VERSION }}
+          toolchain: 1.75.0
           profile: minimal
           override: true
       
-      - name: Install Solana CLI
+      - name: Install Solana
         run: |
-          wget -O solana-install-init https://github.com/solana-labs/solana/releases/download/v${{ env.SOLANA_VERSION }}/solana-install-init-x86_64-unknown-linux-gnu
-          chmod +x solana-install-init
-          ./solana-install-init ${{ env.SOLANA_VERSION }}
+          sh -c "$(curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install)"
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
       
-      - name: Install Anchor CLI
+      - name: Install Anchor
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked --force
+          npm install -g @coral-xyz/anchor-cli@${{ env.ANCHOR_VERSION }}
       
       - name: Install dependencies
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          yarn install
+        run: yarn install
       
       - name: Deploy to mainnet
         env:
