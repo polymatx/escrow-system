@@ -53,18 +53,20 @@ jobs:
         run: |
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
       
       - name: Install Anchor CLI
         run: |
-          # Clean any previous downloads
-          rm -f /tmp/anchor.tar.bz2
-          
-          # Install directly from source with specific tag
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked --force
       
       - name: Verify installations
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          echo "PATH: $PATH"
+          which solana || echo "solana not in PATH"
+          which anchor || echo "anchor not in PATH"
           solana --version
           anchor --version
       
@@ -72,9 +74,12 @@ jobs:
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana-keygen new --no-bip39-passphrase --force
+          solana config get
       
       - name: Install dependencies
-        run: yarn install
+        run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          yarn install
       
       - name: Build program
         run: |
@@ -109,14 +114,18 @@ jobs:
       - name: Install Solana
         run: |
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
       
       - name: Install Anchor CLI
         run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked --force
       
       - name: Install dependencies
-        run: yarn install
+        run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          yarn install
       
       - name: Deploy to devnet
         env:
@@ -151,14 +160,18 @@ jobs:
       - name: Install Solana
         run: |
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
       
       - name: Install Anchor CLI
         run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked --force
       
       - name: Install dependencies
-        run: yarn install
+        run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          yarn install
       
       - name: Deploy to mainnet
         env:
