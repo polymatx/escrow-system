@@ -9,7 +9,7 @@ on:
 env:
   SOLANA_VERSION: "2.2.21"
   ANCHOR_VERSION: "0.31.1"
-  RUST_VERSION: "1.79.0"
+  RUST_VERSION: "1.81.0"
 
 jobs:
   test:
@@ -39,7 +39,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Cache Solana
         uses: actions/cache@v3
@@ -54,12 +54,12 @@ jobs:
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
       
-      - name: Install AVM and Anchor
+      - name: Install Anchor CLI precompiled
         run: |
-          rm -f ~/.cargo/bin/anchor || true
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          ~/.cargo/bin/avm install ${{ env.ANCHOR_VERSION }}
-          ~/.cargo/bin/avm use ${{ env.ANCHOR_VERSION }}
+          wget -O anchor-cli.tar.bz2 https://github.com/coral-xyz/anchor/releases/download/v${{ env.ANCHOR_VERSION }}/anchor-cli-v${{ env.ANCHOR_VERSION }}-x86_64-unknown-linux-gnu.tar.bz2
+          tar -xjf anchor-cli.tar.bz2
+          sudo mv anchor ~/.cargo/bin/anchor
+          chmod +x ~/.cargo/bin/anchor
       
       - name: Verify installations
         run: |
@@ -110,11 +110,12 @@ jobs:
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
       
-      - name: Install AVM and Anchor
+      - name: Install Anchor CLI precompiled
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          ~/.cargo/bin/avm install ${{ env.ANCHOR_VERSION }}
-          ~/.cargo/bin/avm use ${{ env.ANCHOR_VERSION }}
+          wget -O anchor-cli.tar.bz2 https://github.com/coral-xyz/anchor/releases/download/v${{ env.ANCHOR_VERSION }}/anchor-cli-v${{ env.ANCHOR_VERSION }}-x86_64-unknown-linux-gnu.tar.bz2
+          tar -xjf anchor-cli.tar.bz2
+          sudo mv anchor ~/.cargo/bin/anchor
+          chmod +x ~/.cargo/bin/anchor
       
       - name: Install dependencies
         run: yarn install
@@ -154,11 +155,12 @@ jobs:
           curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
       
-      - name: Install AVM and Anchor
+      - name: Install Anchor CLI precompiled
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          ~/.cargo/bin/avm install ${{ env.ANCHOR_VERSION }}
-          ~/.cargo/bin/avm use ${{ env.ANCHOR_VERSION }}
+          wget -O anchor-cli.tar.bz2 https://github.com/coral-xyz/anchor/releases/download/v${{ env.ANCHOR_VERSION }}/anchor-cli-v${{ env.ANCHOR_VERSION }}-x86_64-unknown-linux-gnu.tar.bz2
+          tar -xjf anchor-cli.tar.bz2
+          sudo mv anchor ~/.cargo/bin/anchor
+          chmod +x ~/.cargo/bin/anchor
       
       - name: Install dependencies
         run: yarn install
