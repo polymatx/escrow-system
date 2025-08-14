@@ -56,34 +56,17 @@ jobs:
       
       - name: Install Anchor CLI
         run: |
-          # Try different approaches to install anchor
-          if ! command -v anchor &> /dev/null; then
-            echo "Installing Anchor CLI..."
-            
-            # Method 1: Try precompiled binary from solana-foundation
-            wget -O /tmp/anchor.tar.bz2 "https://github.com/solana-foundation/anchor/releases/download/v${{ env.ANCHOR_VERSION }}/anchor-cli-v${{ env.ANCHOR_VERSION }}-x86_64-unknown-linux-gnu.tar.bz2" || \
-            
-            # Method 2: Try from coral-xyz releases  
-            wget -O /tmp/anchor.tar.bz2 "https://github.com/coral-xyz/anchor/releases/download/v${{ env.ANCHOR_VERSION }}/anchor-cli-v${{ env.ANCHOR_VERSION }}-x86_64-unknown-linux-gnu.tar.bz2" || \
-            
-            # Method 3: Build from source with newer Rust
-            (echo "Building from source..." && cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked)
-            
-            # Extract if downloaded
-            if [ -f /tmp/anchor.tar.bz2 ]; then
-              cd /tmp
-              tar -xjf anchor.tar.bz2
-              mkdir -p ~/.cargo/bin
-              mv anchor ~/.cargo/bin/anchor
-              chmod +x ~/.cargo/bin/anchor
-            fi
-          fi
+          # Clean any previous downloads
+          rm -f /tmp/anchor.tar.bz2
+          
+          # Install directly from source with specific tag
+          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked --force
       
       - name: Verify installations
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
-          anchor --version || ~/.cargo/bin/anchor --version
+          anchor --version
       
       - name: Setup Solana keypair
         run: |
@@ -96,20 +79,12 @@ jobs:
       - name: Build program
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          if command -v anchor &> /dev/null; then
-            anchor build
-          else
-            ~/.cargo/bin/anchor build
-          fi
+          anchor build
       
       - name: Run tests
         run: |
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          if command -v anchor &> /dev/null; then
-            anchor test --skip-local-validator
-          else
-            ~/.cargo/bin/anchor test --skip-local-validator
-          fi
+          anchor test --skip-local-validator
 
   deploy-devnet:
     needs: test
@@ -138,7 +113,7 @@ jobs:
       
       - name: Install Anchor CLI
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked
+          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked --force
       
       - name: Install dependencies
         run: yarn install
@@ -180,7 +155,7 @@ jobs:
       
       - name: Install Anchor CLI
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked
+          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v${{ env.ANCHOR_VERSION }} --locked --force
       
       - name: Install dependencies
         run: yarn install
