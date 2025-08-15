@@ -46,10 +46,14 @@ jobs:
       - name: Install Anchor CLI
         run: |
           npm install -g @coral-xyz/anchor-cli@0.31.1
-          export PATH="$HOME/.npm-global/bin:$PATH"
-          echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
-          which anchor || (npm config get prefix && ls -la $(npm config get prefix)/bin/)
-          $(npm config get prefix)/bin/anchor --version || anchor --version
+          # Find and make anchor executable
+          ANCHOR_PATH=$(npm config get prefix)/lib/node_modules/@coral-xyz/anchor-cli/anchor
+          chmod +x $ANCHOR_PATH
+          # Add to PATH
+          export PATH="$(npm config get prefix)/bin:$PATH"
+          echo "$(npm config get prefix)/bin" >> $GITHUB_PATH
+          # Verify installation
+          anchor --version
       
       - name: Setup Solana keypair
         run: |
@@ -113,10 +117,14 @@ jobs:
       - name: Install Anchor CLI
         run: |
           npm install -g @coral-xyz/anchor-cli@0.31.1
-          export PATH="$HOME/.npm-global/bin:$PATH"
-          echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
-          which anchor || (npm config get prefix && ls -la $(npm config get prefix)/bin/)
-          $(npm config get prefix)/bin/anchor --version || anchor --version
+          # Find and make anchor executable
+          ANCHOR_PATH=$(npm config get prefix)/lib/node_modules/@coral-xyz/anchor-cli/anchor
+          chmod +x $ANCHOR_PATH
+          # Add to PATH
+          export PATH="$(npm config get prefix)/bin:$PATH"
+          echo "$(npm config get prefix)/bin" >> $GITHUB_PATH
+          # Verify installation
+          anchor --version
       
       - name: Install dependencies
         run: yarn install --frozen-lockfile
@@ -186,10 +194,14 @@ jobs:
       - name: Install Anchor CLI
         run: |
           npm install -g @coral-xyz/anchor-cli@0.31.1
-          export PATH="$HOME/.npm-global/bin:$PATH"
-          echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
-          which anchor || (npm config get prefix && ls -la $(npm config get prefix)/bin/)
-          $(npm config get prefix)/bin/anchor --version || anchor --version
+          # Find and make anchor executable
+          ANCHOR_PATH=$(npm config get prefix)/lib/node_modules/@coral-xyz/anchor-cli/anchor
+          chmod +x $ANCHOR_PATH
+          # Add to PATH
+          export PATH="$(npm config get prefix)/bin:$PATH"
+          echo "$(npm config get prefix)/bin" >> $GITHUB_PATH
+          # Verify installation
+          anchor --version
       
       - name: Install dependencies
         run: yarn install --frozen-lockfile
