@@ -45,14 +45,7 @@ jobs:
       
       - name: Install Anchor CLI
         run: |
-          npm install -g @coral-xyz/anchor-cli@0.31.1
-          # Find and make anchor executable
-          ANCHOR_PATH=$(npm config get prefix)/lib/node_modules/@coral-xyz/anchor-cli/anchor
-          chmod +x $ANCHOR_PATH
-          # Add to PATH
-          export PATH="$(npm config get prefix)/bin:$PATH"
-          echo "$(npm config get prefix)/bin" >> $GITHUB_PATH
-          # Verify installation
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.31.1 anchor-cli --locked
           anchor --version
       
       - name: Setup Solana keypair
@@ -66,13 +59,11 @@ jobs:
       
       - name: Build program
         run: |
-          export PATH="$(npm config get prefix)/bin:$PATH"
           anchor build
           ls -la target/deploy/
       
       - name: Start test validator and run tests
         run: |
-          export PATH="$(npm config get prefix)/bin:$PATH"
           solana-test-validator --quiet --reset &
           VALIDATOR_PID=$!
           sleep 5
@@ -116,14 +107,7 @@ jobs:
       
       - name: Install Anchor CLI
         run: |
-          npm install -g @coral-xyz/anchor-cli@0.31.1
-          # Find and make anchor executable
-          ANCHOR_PATH=$(npm config get prefix)/lib/node_modules/@coral-xyz/anchor-cli/anchor
-          chmod +x $ANCHOR_PATH
-          # Add to PATH
-          export PATH="$(npm config get prefix)/bin:$PATH"
-          echo "$(npm config get prefix)/bin" >> $GITHUB_PATH
-          # Verify installation
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.31.1 anchor-cli --locked
           anchor --version
       
       - name: Install dependencies
@@ -131,14 +115,12 @@ jobs:
       
       - name: Build program
         run: |
-          export PATH="$(npm config get prefix)/bin:$PATH"
           anchor build
       
       - name: Deploy to devnet
         env:
           DEPLOY_KEYPAIR: ${{ secrets.DEVNET_DEPLOY_KEYPAIR }}
         run: |
-          export PATH="$(npm config get prefix)/bin:$PATH"
           # Check if keypair secret exists
           if [ -z "$DEPLOY_KEYPAIR" ]; then
             echo "Error: DEVNET_DEPLOY_KEYPAIR secret not set"
@@ -193,14 +175,7 @@ jobs:
       
       - name: Install Anchor CLI
         run: |
-          npm install -g @coral-xyz/anchor-cli@0.31.1
-          # Find and make anchor executable
-          ANCHOR_PATH=$(npm config get prefix)/lib/node_modules/@coral-xyz/anchor-cli/anchor
-          chmod +x $ANCHOR_PATH
-          # Add to PATH
-          export PATH="$(npm config get prefix)/bin:$PATH"
-          echo "$(npm config get prefix)/bin" >> $GITHUB_PATH
-          # Verify installation
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.31.1 anchor-cli --locked
           anchor --version
       
       - name: Install dependencies
@@ -208,14 +183,12 @@ jobs:
       
       - name: Build program
         run: |
-          export PATH="$(npm config get prefix)/bin:$PATH"
           anchor build
       
       - name: Deploy to mainnet
         env:
           DEPLOY_KEYPAIR: ${{ secrets.MAINNET_DEPLOY_KEYPAIR }}
         run: |
-          export PATH="$(npm config get prefix)/bin:$PATH"
           # Check if keypair secret exists
           if [ -z "$DEPLOY_KEYPAIR" ]; then
             echo "Error: MAINNET_DEPLOY_KEYPAIR secret not set"
