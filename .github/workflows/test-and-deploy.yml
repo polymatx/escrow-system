@@ -45,7 +45,7 @@ jobs:
       
       - name: Install Anchor CLI
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor --tag v0.29.0 anchor-cli --locked
+          npm install -g @coral-xyz/anchor-cli@0.31.1
           anchor --version
       
       - name: Setup Solana keypair
@@ -107,7 +107,7 @@ jobs:
       
       - name: Install Anchor CLI
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor --tag v0.29.0 anchor-cli --locked
+          npm install -g @coral-xyz/anchor-cli@0.31.1
           anchor --version
       
       - name: Install dependencies
@@ -174,7 +174,7 @@ jobs:
       
       - name: Install Anchor CLI
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor --tag v0.29.0 anchor-cli --locked
+          npm install -g @coral-xyz/anchor-cli@0.31.1
           anchor --version
       
       - name: Install dependencies
