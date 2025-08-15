@@ -46,7 +46,10 @@ jobs:
       - name: Install Anchor CLI
         run: |
           npm install -g @coral-xyz/anchor-cli@0.31.1
-          anchor --version
+          export PATH="$HOME/.npm-global/bin:$PATH"
+          echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
+          which anchor || (npm config get prefix && ls -la $(npm config get prefix)/bin/)
+          $(npm config get prefix)/bin/anchor --version || anchor --version
       
       - name: Setup Solana keypair
         run: |
@@ -59,11 +62,13 @@ jobs:
       
       - name: Build program
         run: |
+          export PATH="$(npm config get prefix)/bin:$PATH"
           anchor build
           ls -la target/deploy/
       
       - name: Start test validator and run tests
         run: |
+          export PATH="$(npm config get prefix)/bin:$PATH"
           solana-test-validator --quiet --reset &
           VALIDATOR_PID=$!
           sleep 5
@@ -108,18 +113,24 @@ jobs:
       - name: Install Anchor CLI
         run: |
           npm install -g @coral-xyz/anchor-cli@0.31.1
-          anchor --version
+          export PATH="$HOME/.npm-global/bin:$PATH"
+          echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
+          which anchor || (npm config get prefix && ls -la $(npm config get prefix)/bin/)
+          $(npm config get prefix)/bin/anchor --version || anchor --version
       
       - name: Install dependencies
         run: yarn install --frozen-lockfile
       
       - name: Build program
-        run: anchor build
+        run: |
+          export PATH="$(npm config get prefix)/bin:$PATH"
+          anchor build
       
       - name: Deploy to devnet
         env:
           DEPLOY_KEYPAIR: ${{ secrets.DEVNET_DEPLOY_KEYPAIR }}
         run: |
+          export PATH="$(npm config get prefix)/bin:$PATH"
           # Check if keypair secret exists
           if [ -z "$DEPLOY_KEYPAIR" ]; then
             echo "Error: DEVNET_DEPLOY_KEYPAIR secret not set"
@@ -175,18 +186,24 @@ jobs:
       - name: Install Anchor CLI
         run: |
           npm install -g @coral-xyz/anchor-cli@0.31.1
-          anchor --version
+          export PATH="$HOME/.npm-global/bin:$PATH"
+          echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
+          which anchor || (npm config get prefix && ls -la $(npm config get prefix)/bin/)
+          $(npm config get prefix)/bin/anchor --version || anchor --version
       
       - name: Install dependencies
         run: yarn install --frozen-lockfile
       
       - name: Build program
-        run: anchor build
+        run: |
+          export PATH="$(npm config get prefix)/bin:$PATH"
+          anchor build
       
       - name: Deploy to mainnet
         env:
           DEPLOY_KEYPAIR: ${{ secrets.MAINNET_DEPLOY_KEYPAIR }}
         run: |
+          export PATH="$(npm config get prefix)/bin:$PATH"
           # Check if keypair secret exists
           if [ -z "$DEPLOY_KEYPAIR" ]; then
             echo "Error: MAINNET_DEPLOY_KEYPAIR secret not set"
