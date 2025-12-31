@@ -132,11 +132,7 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
       
-      - name: Build program
-        run: |
-          anchor build
-      
-      - name: Deploy to devnet
+      - name: Setup deploy keypair
         env:
           DEPLOY_KEYPAIR: ${{ secrets.DEVNET_DEPLOY_KEYPAIR }}
         run: |
@@ -147,21 +143,46 @@ jobs:
             exit 1
           fi
           
-          echo "$DEPLOY_KEYPAIR" > keypair.json
-          solana config set --keypair keypair.json --url devnet
+          # Write keypair to default Solana config location
+          mkdir -p ~/.config/solana
+          echo "$DEPLOY_KEYPAIR" > ~/.config/solana/id.json
           
-          # Request airdrop for deployment
+          # Configure Solana CLI
+          solana config set --keypair ~/.config/solana/id.json --url devnet
+          solana config get
+          
+          # Show keypair info
+          echo "Deploy wallet: $(solana address)"
+          
+          # Request airdrop for deployment (may fail if rate limited)
           solana airdrop 2 || true
-          sleep 5
+          sleep 3
           
           # Check balance
-          solana balance
+          echo "Balance: $(solana balance)"
+      
+      - name: Build program
+        run: |
+          anchor build
           
-          # Deploy
-          anchor deploy --provider.cluster devnet --program-name escrow_system
+          # Show program info
+          echo "Program keypair:"
+          ls -la target/deploy/
+      
+      - name: Deploy to devnet
+        run: |
+          echo "Deploying to devnet..."
+          echo "Wallet: $(solana address)"
+          echo "Balance: $(solana balance)"
           
-          # Clean up
-          rm keypair.json
+          # Deploy using solana program deploy
+          solana program deploy \
+            --program-id target/deploy/escrow_system-keypair.json \
+            target/deploy/escrow_system.so \
+            --url devnet
+          
+          echo "Deployment complete!"
+          echo "Program ID: $(solana-keygen pubkey target/deploy/escrow_system-keypair.json)"
 
   deploy-mainnet:
     needs: test
@@ -200,11 +221,7 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
       
-      - name: Build program
-        run: |
-          anchor build
-      
-      - name: Deploy to mainnet
+      - name: Setup deploy keypair
         env:
           DEPLOY_KEYPAIR: ${{ secrets.MAINNET_DEPLOY_KEYPAIR }}
         run: |
@@ -215,15 +232,33 @@ jobs:
             exit 1
           fi
           
-          echo "$DEPLOY_KEYPAIR" > keypair.json
-          solana config set --keypair keypair.json --url mainnet-beta
+          # Write keypair to default Solana config location
+          mkdir -p ~/.config/solana
+          echo "$DEPLOY_KEYPAIR" > ~/.config/solana/id.json
           
-          # Check balance (ensure you have enough SOL for deployment)
-          solana balance
+          # Configure Solana CLI
+          solana config set --keypair ~/.config/solana/id.json --url mainnet-beta
+          solana config get
           
-          # Deploy with caution
+          # Show keypair info
+          echo "Deploy wallet: $(solana address)"
+          echo "Balance: $(solana balance)"
+      
+      - name: Build program
+        run: |
+          anchor build
+      
+      - name: Deploy to mainnet
+        run: |
           echo "Deploying to mainnet..."
-          anchor deploy --provider.cluster mainnet-beta --program-name escrow_system
+          echo "Wallet: $(solana address)"
+          echo "Balance: $(solana balance)"
           
-          # Clean up
-          rm keypair.json
+          # Deploy using solana program deploy
+          solana program deploy \
+            --program-id target/deploy/escrow_system-keypair.json \
+            target/deploy/escrow_system.so \
+            --url mainnet-beta
+          
+          echo "Deployment complete!"
+          echo "Program ID: $(solana-keygen pubkey target/deploy/escrow_system-keypair.json)"
