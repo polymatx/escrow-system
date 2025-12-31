@@ -173,6 +173,41 @@ function App() {
 }
 ```
 
+### Option 4: REST API Microservice (PHP, Python, Go, etc.)
+
+Run the microservice and call it from any backend:
+
+```bash
+cd microservice
+npm install
+npm start
+# Server runs on http://localhost:3001
+```
+
+Then from your backend:
+
+```php
+// PHP Laravel
+$response = Http::post('http://localhost:3001/escrow/create', [
+    'buyerKeypair' => $keypair,
+    'seller' => $sellerAddress,
+    'mint' => $usdcMint,
+    'amount' => 1000000,
+]);
+```
+
+```python
+# Python
+response = requests.post('http://localhost:3001/escrow/create', json={...})
+```
+
+```go
+// Go
+resp, _ := http.Post("http://localhost:3001/escrow/create", "application/json", body)
+```
+
+See [microservice/README.md](microservice/README.md) for full API documentation.
+
 ### What You Get
 
 | Feature | Description |
