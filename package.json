@@ -1,0 +1,69 @@
+{
+  "name": "solana-escrow-system",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "description": "A secure and feature-rich escrow system built on Solana blockchain",
+  "main": "index.js",
+  "keywords": [
+    "solana",
+    "escrow",
+    "blockchain",
+    "smart-contract",
+    "defi",
+    "anchor"
+  ],
+  "author": "polymatx <farid.vosoughi.65@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/polymatx/escrow-system.git"
+  },
+  "bugs": {
+    "url": "https://github.com/polymatx/escrow-system/issues"
+  },
+  "homepage": "https://github.com/polymatx/escrow-system#readme",
+  "scripts": {
+    "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "test": "anchor test",
+    "test:unit": "anchor test --skip-local-validator",
+    "build": "anchor build",
+    "clean": "anchor clean",
+    "deploy:localnet": "anchor deploy --provider.cluster localnet",
+    "deploy:devnet": "anchor deploy --provider.cluster devnet",
+    "deploy:mainnet": "anchor deploy --provider.cluster mainnet",
+    "setup": "chmod +x scripts/*.sh && ./scripts/setup.sh",
+    "start:validator": "solana-test-validator --reset",
+    "start:monitoring": "node monitoring/program-monitor.js",
+    "example": "node client/working-example.js",
+    "example:ts": "ts-node client/example-usage.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.29.0",
+    "@solana/spl-token": "0.4.6",
+    "@solana/web3.js": "1.95.5",
+    "@solana/wallet-adapter-base": "^0.9.23",
+    "@solana/wallet-adapter-react": "^0.15.35",
+    "@solana/wallet-adapter-wallets": "^0.19.32",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.4.1"
+  },
+  "resolutions": {
+    "@solana/web3.js": "1.95.5"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.10.1",
+    "chai": "^6.2.1",
+    "mocha": "^11.7.5",
+    "ts-mocha": "^11.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,229 @@
+name: Test and Deploy
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'yarn'
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.79.0
+          profile: minimal
+          override: true
+          components: rustfmt, clippy
+      
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Install Solana CLI
+        run: |
+          wget https://github.com/solana-labs/solana/releases/download/v1.18.22/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+          tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
+          export PATH=$PWD/solana-release/bin:$PATH
+          echo "$PWD/solana-release/bin" >> $GITHUB_PATH
+          solana --version
+
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.29.0 anchor-cli --locked
+          anchor --version
+      
+      - name: Setup Solana keypair
+        run: |
+          solana-keygen new --no-bip39-passphrase --force
+          solana config set --url localhost
+          solana config get
+      
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      
+      - name: Build and sync program ID
+        run: |
+          # First build to generate keypair
+          anchor build
+          
+          # Get the generated program ID from keypair
+          PROGRAM_ID=$(solana-keygen pubkey target/deploy/escrow_system-keypair.json)
+          echo "Program ID: $PROGRAM_ID"
+          
+          # Update declare_id! in lib.rs
+          sed -i "s/declare_id!(\"[^\"]*\")/declare_id!(\"$PROGRAM_ID\")/" programs/escrow-system/src/lib.rs
+          
+          # Update Anchor.toml
+          sed -i "s/^escrow_system = \"[^\"]*\"/escrow_system = \"$PROGRAM_ID\"/" Anchor.toml
+          
+          # Rebuild with correct program ID
+          anchor build
+          
+          # Verify the IDL has correct address
+          echo "IDL metadata:"
+          cat target/idl/escrow_system.json | head -20
+          
+          ls -la target/deploy/
+      
+      - name: Start test validator and run tests
+        run: |
+          solana-test-validator --quiet --reset &
+          VALIDATOR_PID=$!
+          sleep 5
+          
+          # Check validator is running
+          solana cluster-version
+          
+          # Run tests
+          anchor test --skip-local-validator
+          
+          # Kill validator
+          kill $VALIDATOR_PID || true
+
+  deploy-devnet:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'yarn'
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.79.0
+          profile: minimal
+          override: true
+      
+      - name: Install Solana CLI
+        run: |
+          wget https://github.com/solana-labs/solana/releases/download/v1.18.22/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+          tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
+          export PATH=$PWD/solana-release/bin:$PATH
+          echo "$PWD/solana-release/bin" >> $GITHUB_PATH
+          solana --version
+      
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.29.0 anchor-cli --locked
+          anchor --version
+      
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      
+      - name: Build program
+        run: |
+          anchor build
+      
+      - name: Deploy to devnet
+        env:
+          DEPLOY_KEYPAIR: ${{ secrets.DEVNET_DEPLOY_KEYPAIR }}
+        run: |
+          # Check if keypair secret exists
+          if [ -z "$DEPLOY_KEYPAIR" ]; then
+            echo "Error: DEVNET_DEPLOY_KEYPAIR secret not set"
+            echo "Please add your deployment keypair to GitHub secrets"
+            exit 1
+          fi
+          
+          echo "$DEPLOY_KEYPAIR" > keypair.json
+          solana config set --keypair keypair.json --url devnet
+          
+          # Request airdrop for deployment
+          solana airdrop 2 || true
+          sleep 5
+          
+          # Check balance
+          solana balance
+          
+          # Deploy
+          anchor deploy --provider.cluster devnet --program-name escrow_system
+          
+          # Clean up
+          rm keypair.json
+
+  deploy-mainnet:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: mainnet
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'yarn'
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.79.0
+          profile: minimal
+          override: true
+      
+      - name: Install Solana CLI
+        run: |
+          wget https://github.com/solana-labs/solana/releases/download/v1.18.22/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+          tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
+          export PATH=$PWD/solana-release/bin:$PATH
+          echo "$PWD/solana-release/bin" >> $GITHUB_PATH
+          solana --version
+      
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.29.0 anchor-cli --locked
+          anchor --version
+      
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      
+      - name: Build program
+        run: |
+          anchor build
+      
+      - name: Deploy to mainnet
+        env:
+          DEPLOY_KEYPAIR: ${{ secrets.MAINNET_DEPLOY_KEYPAIR }}
+        run: |
+          # Check if keypair secret exists
+          if [ -z "$DEPLOY_KEYPAIR" ]; then
+            echo "Error: MAINNET_DEPLOY_KEYPAIR secret not set"
+            echo "Please add your deployment keypair to GitHub secrets"
+            exit 1
+          fi
+          
+          echo "$DEPLOY_KEYPAIR" > keypair.json
+          solana config set --keypair keypair.json --url mainnet-beta
+          
+          # Check balance (ensure you have enough SOL for deployment)
+          solana balance
+          
+          # Deploy with caution
+          echo "Deploying to mainnet..."
+          anchor deploy --provider.cluster mainnet-beta --program-name escrow_system
+          
+          # Clean up
+          rm keypair.json

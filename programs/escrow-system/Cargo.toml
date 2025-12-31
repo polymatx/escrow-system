@@ -1,0 +1,23 @@
+[package]
+name = "escrow-system"
+version = "0.1.0"
+description = "A secure and feature-rich escrow system built on Solana"
+edition = "2021"
+authors = ["polymatx <farid.vosoughi.65@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/polymatx/escrow-system"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "escrow_system"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.29.0"
+anchor-spl = "0.29.0"

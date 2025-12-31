@@ -1,0 +1,129 @@
+# Solana Escrow System
+
+A secure, feature-rich, and production-ready escrow system built on Solana blockchain using Anchor framework.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Solana](https://img.shields.io/badge/Solana-v1.18+-blueviolet)](https://solana.org)
+[![Anchor](https://img.shields.io/badge/Anchor-v0.29.0-orange)](https://anchor-lang.com)
+
+## Features
+
+- **Secure**: Patched against Rug Pulls and Arbiter Replacement attacks
+- **Timeout Support**: Automatic release mechanisms with configurable timeouts
+- **Dispute Resolution**: Built-in arbiter system for conflict resolution
+- **Flexible**: Support for any SPL token with customizable release conditions
+- **Event System**: Comprehensive event emission for real-time monitoring
+- **Frontend Ready**: React components and JavaScript SDK included
+
+## Deployed on Devnet
+
+**Program ID:** `9pZmQesbcR58wxt3bncrm1S615sv2nr3LJYpcah1B6LB`
+
+You can interact with this program immediately using the client scripts.
+
+## Architecture
+
+```
++-------------------+    +-------------------+    +-------------------+
+|      Buyer        |    |     Escrow        |    |      Seller       |
+|                   |    |    Program        |    |                   |
+|   +-----------+   |    |                   |    |   +-----------+   |
+|   |   Funds   |---+--->|---> Vault --------+--->|-->|  Release  |   |
+|   +-----------+   |    |                   |    |   +-----------+   |
++-------------------+    +-------------------+    +-------------------+
+                                 |
+                        +-------------------+
+                        |     Arbiter       |
+                        |   (Optional)      |
+                        +-------------------+
+```
+
+## Quick Start
+
+### Prerequisites
+
+- **Rust** (1.79.0+)
+- **Solana CLI** (v1.18.x)
+- **Anchor CLI** (v0.29.0)
+- **Node.js** (v16+)
+- **Yarn**
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/polymatx/escrow-system.git
+   cd escrow-system
+   ```
+
+2. **Install dependencies**
+   ```bash
+   yarn install
+   ```
+
+3. **Build the program**
+   ```bash
+   anchor build
+   ```
+
+4. **Run the Example (Devnet)**
+   
+   Ensure you have a Devnet wallet configured in `~/.config/solana/id.json`.
+   
+   ```bash
+   # Set provider to Devnet
+   export ANCHOR_PROVIDER_URL="https://api.devnet.solana.com"
+   export ANCHOR_WALLET="$HOME/.config/solana/id.json"
+   
+   # Run the script
+   node client/working-example.js
+   ```
+
+## Security Updates
+
+This contract has been patched to address critical vulnerabilities:
+
+1. **Rug Pull Prevention**: The `cancel()` instruction is now strictly restricted to the `Initialized` state. Once a buyer deposits funds (moving to `Funded` state), they **cannot** unilaterally cancel the escrow to withdraw funds. Only the Arbiter or a timeout/release condition can move the funds.
+
+2. **Arbiter Locking**: The `set_arbiter()` instruction is restricted to the `Initialized` state. The buyer cannot change the arbiter address once the trade has begun.
+
+## State Management
+
+```mermaid
+stateDiagram-v2
+    [*] --> Initialized: initialize_escrow()
+    Initialized --> Funded: deposit()
+    Initialized --> Cancelled: cancel() (Buyer only)
+    Funded --> Released: release()
+    Released --> [*]: close_escrow()
+    Cancelled --> [*]: close_escrow()
+```
+
+## Smart Contract API
+
+### Instructions
+
+| Instruction | Description | Authority Required |
+|-------------|-------------|-------------------|
+| `initialize_escrow` | Create new escrow | Buyer |
+| `deposit` | Fund the escrow | Buyer |
+| `release` | Release funds to seller | Buyer / Arbiter / After Timeout |
+| `cancel` | Cancel and refund to buyer | Buyer (Initialized state only) |
+| `set_arbiter` | Set dispute resolver | Buyer (Initialized only) |
+| `update_conditions` | Modify release conditions | Buyer (before funding) |
+| `close_escrow` | Close account and recover rent | Buyer (after completion) |
+
+## Documentation
+
+- [API Reference](docs/api.md) - Client SDK documentation
+- [Deployment Guide](docs/deployment.md) - How to deploy to devnet/mainnet
+- [Security](docs/security.md) - Security model and best practices
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
