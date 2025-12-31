@@ -113,6 +113,76 @@ stateDiagram-v2
 | `update_conditions` | Modify release conditions | Buyer (before funding) |
 | `close_escrow` | Close account and recover rent | Buyer (after completion) |
 
+## Integration Guide
+
+Want to use this escrow system in your platform? Here's how:
+
+### Option 1: Use the JavaScript/TypeScript SDK
+
+```typescript
+import { Connection, PublicKey, Keypair } from '@solana/web3.js';
+import { BN } from '@coral-xyz/anchor';
+
+// Copy client/escrow-client.ts to your project, then:
+import { createEscrowClient } from './escrow-client';
+
+const PROGRAM_ID = "9pZmQesbcR58wxt3bncrm1S615sv2nr3LJYpcah1B6LB";
+
+// Initialize client
+const connection = new Connection("https://api.devnet.solana.com");
+const escrowClient = await createEscrowClient(
+  connection,
+  wallet,
+  new PublicKey(PROGRAM_ID)
+);
+
+// Create an escrow
+const { escrow, vault } = await escrowClient.initializeEscrow(buyerKeypair, {
+  amount: new BN(1000000),        // 1 USDC (6 decimals)
+  seller: sellerPublicKey,
+  mint: usdcMint,
+  releaseConditions: "Product delivery confirmed",
+  timeoutDuration: new BN(7 * 24 * 3600), // 7 days
+});
+
+// Deposit funds
+await escrowClient.deposit(buyerKeypair, escrow, usdcMint);
+
+// Release to seller (when conditions met)
+await escrowClient.releaseFunds(buyerKeypair, escrow);
+```
+
+### Option 2: Direct Program Interaction
+
+Use the Program ID with any Solana SDK:
+
+```
+Program ID: 9pZmQesbcR58wxt3bncrm1S615sv2nr3LJYpcah1B6LB
+IDL: target/idl/escrow_system.json
+```
+
+### Option 3: React Components
+
+```tsx
+import { EscrowUI } from './frontend/escrow-ui';
+
+function App() {
+  return (
+    <EscrowUI programId="9pZmQesbcR58wxt3bncrm1S615sv2nr3LJYpcah1B6LB" />
+  );
+}
+```
+
+### What You Get
+
+| Feature | Description |
+|---------|-------------|
+| SPL Token Support | Works with USDC, USDT, or any SPL token |
+| Arbiter System | Optional third-party dispute resolution |
+| Timeout Protection | Auto-release after configurable period |
+| Event Monitoring | Real-time escrow status updates |
+| Security | Rug-pull and fraud protection built-in |
+
 ## Documentation
 
 - [API Reference](docs/api.md) - Client SDK documentation
