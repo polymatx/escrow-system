@@ -185,6 +185,7 @@ function App() {
 
 ## Documentation
 
+- [Integration Guide](docs/integration.md) - CPI integration for other Solana programs
 - [API Reference](docs/api.md) - Client SDK documentation
 - [Deployment Guide](docs/deployment.md) - How to deploy to devnet/mainnet
 - [Security](docs/security.md) - Security model and best practices
